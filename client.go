@@ -2,14 +2,9 @@ package main
 
 import "github.com/gorilla/websocket"
 
-// type Client struct {
-// 	ID        uint64 // 客户端ID
-// 	connect   websocket.Connect
-// 	SendChan  chan []byte
-// 	haveLogin bool // 是否已登录
-
 // Client : a middleman between the websocket connection and the hub.
 type Client struct {
+	ClientID  string
 	conn      *websocket.Conn // The websocket connection.
 	send      chan []byte     // Buffered channel of outbound messages.
 	haveLogin bool            // check whether the client is Validated
@@ -17,8 +12,15 @@ type Client struct {
 }
 
 type ClientManager struct {
-	clients   map[*Client]bool
 	Broadcast chan []byte
+
+	// Register requests from the clients.
+	register chan *Client
+
+	// Unregister requests from clients.
+	unregister chan *Client
+
+	clients map[string]*Client
 	// OnMessage : trigger while receive and client message
 	/*
 		e.g.
@@ -27,10 +29,4 @@ type ClientManager struct {
 		3. ...
 	*/
 	OnMessage OnMessageFunc
-
-	// Register requests from the clients.
-	register chan *Client
-
-	// Unregister requests from clients.
-	unregister chan *Client
 }

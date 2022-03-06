@@ -20,11 +20,12 @@ func ClientCenter(onEvent OnMessageFunc) *ClientManager {
 		Broadcast:  make(chan []byte),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
-		// OnMessage:  onEvent,
+		clients:    make(map[string]*Client),
+		OnMessage:  onEvent,
 	}
 }
 
+// OnMessageFunc : 會檢查每次傳送訊息過來時的 msg []byte
 type OnMessageFunc func(msg []byte, cm *ClientManager) error
 
 func (c *Client) writePump() {
@@ -88,23 +89,25 @@ func (h *ClientManager) Run() {
 		select {
 		case client := <-h.register:
 			log.Printf("new client was add to map ... %v\n", client)
-			h.clients[client] = true
+			h.clients[client.ClientID] = client
 
 			for i, j := range h.clients {
 				log.Printf("%v___%v\n", i, j)
 			}
+
 		case client := <-h.unregister:
-			if _, ok := h.clients[client]; ok {
-				delete(h.clients, client)
+			if _, ok := h.clients[client.ClientID]; ok {
+				delete(h.clients, client.ClientID)
 				close(client.send)
 			}
+
 		case message := <-h.Broadcast:
-			for client := range h.clients {
+			for _, client := range h.clients {
 				select {
 				case client.send <- message:
 				default:
 					close(client.send)
-					delete(h.clients, client)
+					delete(h.clients, client.ClientID)
 				}
 			}
 		}
