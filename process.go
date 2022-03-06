@@ -19,6 +19,7 @@ func (p Process) startprocess() {
 		log.Printf("%v\n", string(msg))
 		return nil
 	}
-	hub := initClientCenter(f)
-	startWebsocket(hub)
+	cm := ClientCenter(f)
+	startServer(cm)
+	apiServer()
 }
