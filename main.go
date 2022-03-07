@@ -1,11 +1,14 @@
 package main
 
-import "net/http"
+import (
+	"net/http"
+	"sktbind/process"
+)
 
 func main() {
 
-	p := newProcess()
-	p.startprocess()
+	p := process.NewProcess()
+	p.Startprocess()
 
 	// select {}
 	// 因為 client 採用 http.HandleFunc，所以要使用 ListenAdnServe 來服務

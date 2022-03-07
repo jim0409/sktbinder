@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"io"
@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-func apiServer() {
+func ApiServer() {
 	http.HandleFunc("/api", kickout)
 }
 

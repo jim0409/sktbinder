@@ -1,19 +1,11 @@
-package main
+package client
 
 import (
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/rs/xid"
-)
-
-const (
-	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
-	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 512
 )
 
 type ClientManager struct {
@@ -100,7 +92,7 @@ func SocketServer(cm *ClientManager, w http.ResponseWriter, r *http.Request) {
 
 }
 
-func startServer(cm *ClientManager) {
+func StartServer(cm *ClientManager) {
 	go cm.Run()
 	http.HandleFunc("/conn", func(res http.ResponseWriter, r *http.Request) {
 		SocketServer(cm, res, r)
