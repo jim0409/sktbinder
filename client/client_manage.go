@@ -5,71 +5,89 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
-	"github.com/rs/xid"
 )
 
 type ClientManager struct {
-	Broadcast chan []byte
-
 	// Register requests from the clients.
 	register chan *Client
 
 	// Unregister requests from clients.
 	unregister chan *Client
 
-	clients map[string]*Client
-	// OnMessage : trigger while receive and client message
-	/*
-		e.g.
-		1. LoginValidation
-		2. last ack sequence number
-		3. ...
-	*/
+	// 儲存 client 在記憶體內
+	// clientMap map[string]*Client
+	clientMap map[*Client]bool
+
+	// 廣播訊息
+	Broadcast chan []byte
+
+	// 接收訊息
+	RecvMsgChan chan *MsgPkg
+
+	// 當 client 取消註冊時，做 Client 關閉動作
+	ClientCloseChan chan *Client
+
+	// 連線建立時觸發
 	OnMessage OnMessageFunc
+
+	// 處理訊息
+	dealMsg interface{}
 }
 
 func ClientCenter(onEvent OnMessageFunc) *ClientManager {
-	return &ClientManager{
-		Broadcast:  make(chan []byte),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		clients:    make(map[string]*Client),
-		OnMessage:  onEvent,
+	c := &ClientManager{
+		Broadcast:   make(chan []byte),
+		RecvMsgChan: make(chan *MsgPkg),
+		register:    make(chan *Client),
+		unregister:  make(chan *Client),
+		clientMap:   make(map[*Client]bool),
+		OnMessage:   onEvent,
 	}
+
+	c.dealMsg = NewDealMsg(c.RecvMsgChan, c.ClientCloseChan)
+	c.Run()
+
+	return c
 }
 
 // OnMessageFunc : 會檢查每次傳送訊息過來時的 msg []byte
 type OnMessageFunc func(msg []byte, cm *ClientManager) error
 
 func (h *ClientManager) Run() {
-	for {
-		select {
-		case client := <-h.register:
-			log.Printf("new client was add to map ... %v\n", client)
-			log.Println("---------", client.ClientID)
-			h.clients[client.ClientID] = client
+	go func() {
+		for {
+			select {
+			case client := <-h.register:
+				log.Printf("new client was add to map ... %s__%v\n", client.ClientID, client)
+				log.Println("---------", client.ClientID)
+				if h.clientMap[client] {
+					h.unregister <- client
+				}
+				h.clientMap[client] = true
 
-			for i, j := range h.clients {
-				log.Printf("%v___%v\n", i, j)
-			}
+				for i, j := range h.clientMap {
+					log.Printf("%v___%v\n", i, j)
+				}
 
-		case client := <-h.unregister:
-			if _, ok := h.clients[client.ClientID]; ok {
-				delete(h.clients, client.ClientID)
-				close(client.send)
-			}
-
-		case message := <-h.Broadcast:
-			for _, client := range h.clients {
-				select {
-				case client.send <- message:
-				default:
+			case client := <-h.unregister:
+				if _, ok := h.clientMap[client]; ok {
+					delete(h.clientMap, client)
 					close(client.send)
-					delete(h.clients, client.ClientID)
+					h.ClientCloseChan <- client
+				}
+
+			case message := <-h.Broadcast:
+				for client, _ := range h.clientMap {
+					select {
+					case client.send <- message:
+					default:
+						close(client.send)
+						delete(h.clientMap, client)
+					}
 				}
 			}
 		}
-	}
+	}()
 }
 
 func SocketServer(cm *ClientManager, w http.ResponseWriter, r *http.Request) {
@@ -87,13 +105,14 @@ func SocketServer(cm *ClientManager, w http.ResponseWriter, r *http.Request) {
 	}
 
 	// new client added ...
-	client := newClient(cm.unregister, cm.Broadcast, xid.New().String(), conn)
+	// client := newClient(cm.unregister, cm.Broadcast, xid.New().String(), conn)
+	// client := newClient(cm.unregister, cm.RecvMsgChan, xid.New().String(), conn)
+	client := newClient(cm.unregister, cm.RecvMsgChan, "123", conn)
 	cm.register <- client
 
 }
 
 func StartServer(cm *ClientManager) {
-	go cm.Run()
 	http.HandleFunc("/conn", func(res http.ResponseWriter, r *http.Request) {
 		SocketServer(cm, res, r)
 	})

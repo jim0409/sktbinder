@@ -2,10 +2,10 @@ package client
 
 import (
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/rs/xid"
 )
 
 const (
@@ -24,9 +24,9 @@ type Client struct {
 	close    chan struct{}
 }
 
-func newClient(unregistChan chan *Client, recvMsg chan []byte, Id string, conn *websocket.Conn) *Client {
+func newClient(unregistChan chan *Client, recvMsg chan *MsgPkg, Id string, conn *websocket.Conn) *Client {
 	client := &Client{
-		ClientID: xid.New().String(),
+		ClientID: Id,
 		conn:     conn,
 		send:     make(chan []byte, 256),
 		close:    make(chan struct{}),
@@ -34,12 +34,13 @@ func newClient(unregistChan chan *Client, recvMsg chan []byte, Id string, conn *
 	}
 
 	go client.writePump()
-	go client.readPump()
+	go client.readPump(unregistChan, recvMsg)
 	go client.loginTimer()
 
 	return client
 }
 
+// writePump: Server to Client
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
@@ -48,6 +49,8 @@ func (c *Client) writePump() {
 	}()
 	for {
 		select {
+		case <-c.close:
+			return
 		case message, ok := <-c.send:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
@@ -74,11 +77,15 @@ func (c *Client) writePump() {
 	}
 }
 
-func (c *Client) readPump() {
+// readPump: Client to Server
+func (c *Client) readPump(unregistChan chan *Client, recvMsgChan chan *MsgPkg) {
 	log.Println("start read message")
 	defer func() {
-		c.conn.Close()
 		log.Println("websocket Close")
+		// c.close <- struct{}{}
+		close(c.close)
+		c.conn.Close()
+		unregistChan <- c // 刪除 clientMap 裡面的 client
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -92,7 +99,16 @@ func (c *Client) readPump() {
 			log.Println("websocket read message have err")
 			break
 		}
-		log.Printf("%v", string(message))
+		// log.Printf("%v", string(message))
+		log.Printf("client %v pass message to msg chain ..\n", c)
+
+		// 將 message 送往 訊息通道 做處理
+		id, _ := strconv.Atoi(c.ClientID)
+		msg := &MsgPkg{
+			MessageType: id,
+			Message:     message,
+		}
+		recvMsgChan <- msg
 	}
 }
 
@@ -109,6 +125,8 @@ func (c *Client) loginTimer() {
 		}
 	}
 }
+
+// Close: 關閉 websocket 的連線
 func (c *Client) Close() {
 	c.conn.Close()
 }
