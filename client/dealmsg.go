@@ -45,6 +45,5 @@ func workRun(id int, msg chan *MsgPkg) {
 	// }
 	for m := range msg {
 		fmt.Printf("inside worker pool execute %d.. %v\n", m.MessageType, string(m.Message))
-
 	}
 }

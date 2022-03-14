@@ -1,7 +1,6 @@
 package client
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -57,17 +56,11 @@ func (h *ClientManager) Run() {
 	go func() {
 		for {
 			select {
-			case client := <-h.register:
-				log.Printf("new client was add to map ... %s__%v\n", client.ClientID, client)
-				log.Println("---------", client.ClientID)
-				if h.clientMap[client] {
-					h.unregister <- client
+			case client, ok := <-h.register:
+				if !ok {
+					return
 				}
 				h.clientMap[client] = true
-
-				for i, j := range h.clientMap {
-					log.Printf("%v___%v\n", i, j)
-				}
 
 			case client := <-h.unregister:
 				if _, ok := h.clientMap[client]; ok {
@@ -100,7 +93,6 @@ func SocketServer(cm *ClientManager, w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println(err)
 		return
 	}
 

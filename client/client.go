@@ -17,27 +17,60 @@ const (
 
 // Client : a middleman between the websocket connection and the hub.
 type Client struct {
-	ClientID string
-	conn     *websocket.Conn // The websocket connection.
-	send     chan []byte     // Buffered channel of outbound messages.
-	login    bool
-	close    chan struct{}
+	ID    string
+	conn  *websocket.Conn // The websocket connection.
+	send  chan []byte     // Buffered channel of outbound messages.
+	login bool
+	close chan struct{}
 }
 
 func newClient(unregistChan chan *Client, recvMsg chan *MsgPkg, Id string, conn *websocket.Conn) *Client {
 	client := &Client{
-		ClientID: Id,
-		conn:     conn,
-		send:     make(chan []byte, 256),
-		close:    make(chan struct{}),
-		login:    true,
+		ID:    Id,
+		conn:  conn,
+		send:  make(chan []byte, 256),
+		close: make(chan struct{}),
+		login: true,
 	}
 
-	go client.writePump()
 	go client.readPump(unregistChan, recvMsg)
+	go client.writePump()
 	go client.loginTimer()
 
 	return client
+}
+
+// readPump: Client to Server
+func (c *Client) readPump(unregistChan chan *Client, recvMsgChan chan *MsgPkg) {
+	log.Println("start read message")
+	defer func() {
+		log.Println("websocket Close")
+		c.conn.Close()
+		unregistChan <- c // 刪除 clientMap 裡面的 client
+	}()
+	c.conn.SetReadLimit(maxMessageSize)
+	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	for {
+		_, message, err := c.conn.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
+				log.Println("websocket.IsUnexpectedCloseError:", err)
+			}
+			log.Println("websocket read message have err")
+			break
+		}
+		// log.Printf("%v", string(message))
+		log.Printf("client %v pass message to msg chain ..\n", c)
+
+		// 將 message 送往 訊息通道 做處理
+		id, _ := strconv.Atoi(c.ID)
+		msg := &MsgPkg{
+			MessageType: id,
+			Message:     message,
+		}
+		recvMsgChan <- msg
+	}
 }
 
 // writePump: Server to Client
@@ -77,51 +110,20 @@ func (c *Client) writePump() {
 	}
 }
 
-// readPump: Client to Server
-func (c *Client) readPump(unregistChan chan *Client, recvMsgChan chan *MsgPkg) {
-	log.Println("start read message")
-	defer func() {
-		log.Println("websocket Close")
-		// c.close <- struct{}{}
-		close(c.close)
-		c.conn.Close()
-		unregistChan <- c // 刪除 clientMap 裡面的 client
-	}()
-	c.conn.SetReadLimit(maxMessageSize)
-	c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
-	for {
-		_, message, err := c.conn.ReadMessage()
-		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
-				log.Println("websocket.IsUnexpectedCloseError:", err)
-			}
-			log.Println("websocket read message have err")
-			break
-		}
-		// log.Printf("%v", string(message))
-		log.Printf("client %v pass message to msg chain ..\n", c)
-
-		// 將 message 送往 訊息通道 做處理
-		id, _ := strconv.Atoi(c.ClientID)
-		msg := &MsgPkg{
-			MessageType: id,
-			Message:     message,
-		}
-		recvMsgChan <- msg
-	}
-}
-
 // timeout second for 10s
 func (c *Client) loginTimer() {
+	log.Println("execute loginTimer")
 	timer := time.NewTimer(10 * time.Second)
 
-	select {
-	case <-c.close:
-		return
-	case <-timer.C:
-		if !c.login {
-			c.Close()
+	for {
+		select {
+		case <-c.close:
+			return
+		case <-timer.C:
+			if !c.login {
+				log.Println("time out")
+				c.Close()
+			}
 		}
 	}
 }
