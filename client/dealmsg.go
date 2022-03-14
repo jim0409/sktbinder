@@ -23,27 +23,32 @@ func NewDealMsg(recvMsgChan chan *MsgPkg, clientCloseChan chan *Client) *DealMsg
 func (d *DealMsg) Run() {
 	for i := 0; i < workNum; i++ {
 		go func(id int) {
-			workRun(id, d.recvMsgChan)
+			workRun(id, d.recvMsgChan, d.clientCloseChan)
 		}(i)
 	}
 }
 
-func workRun(id int, msg chan *MsgPkg) {
+/*
+id: 識別 worker 的狀態
+msg: 傳送給 worker 要做的 message
+closeEvt: 傳送 client 要關閉的事件
+*/
+func workRun(id int, msg chan *MsgPkg, closeEvt chan *Client) {
 	fmt.Printf("enter worker id %d\n", id)
-	// for {
-	// 	select {
-	// 	// TODO: 考慮 global goroutine 停止
-	// 	case m, ok := <-msg:
-	// 		if !ok {
-	// 			return
-	// 		}
-	// 		go func(pkg MsgPkg) {
-	// 			fmt.Println(pkg)
-	// 		}(m)
-	// 		// TODO: 考慮 client 關閉連線
-	// 	}
-	// }
-	for m := range msg {
-		fmt.Printf("inside worker pool execute %d.. %v\n", m.MessageType, string(m.Message))
+	for {
+		select {
+		// TODO: 考慮 global goroutine 停止
+		case m, ok := <-msg:
+			if !ok {
+				return
+			}
+			go func(pkg *MsgPkg) {
+				fmt.Printf("inside worker pool execute %d.. %v\n", m.MessageType, string(m.Message))
+			}(m)
+
+		// TODO: 考慮 server 關閉 client 連線前要提示 client
+		case evt := <-closeEvt:
+			evt.Close()
+		}
 	}
 }

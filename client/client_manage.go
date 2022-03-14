@@ -1,6 +1,7 @@
 package client
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -10,21 +11,17 @@ type ClientManager struct {
 	// Register requests from the clients.
 	register chan *Client
 
-	// Unregister requests from clients.
+	// 當 client 取消註冊時，做 Client 關閉動作
 	unregister chan *Client
 
 	// 儲存 client 在記憶體內
-	// clientMap map[string]*Client
-	clientMap map[*Client]bool
+	clientMap map[string]*Client
 
 	// 廣播訊息
 	Broadcast chan []byte
 
 	// 接收訊息
 	RecvMsgChan chan *MsgPkg
-
-	// 當 client 取消註冊時，做 Client 關閉動作
-	ClientCloseChan chan *Client
 
 	// 連線建立時觸發
 	OnMessage OnMessageFunc
@@ -34,19 +31,19 @@ type ClientManager struct {
 }
 
 func ClientCenter(onEvent OnMessageFunc) *ClientManager {
-	c := &ClientManager{
+	cm := &ClientManager{
 		Broadcast:   make(chan []byte),
 		RecvMsgChan: make(chan *MsgPkg),
 		register:    make(chan *Client),
 		unregister:  make(chan *Client),
-		clientMap:   make(map[*Client]bool),
+		clientMap:   make(map[string]*Client),
 		OnMessage:   onEvent,
 	}
 
-	c.dealMsg = NewDealMsg(c.RecvMsgChan, c.ClientCloseChan)
-	c.Run()
+	cm.dealMsg = NewDealMsg(cm.RecvMsgChan, cm.unregister)
+	cm.Run()
 
-	return c
+	return cm
 }
 
 // OnMessageFunc : 會檢查每次傳送訊息過來時的 msg []byte
@@ -60,22 +57,28 @@ func (h *ClientManager) Run() {
 				if !ok {
 					return
 				}
-				h.clientMap[client] = true
+				if _, ok := h.clientMap[client.ID]; ok {
+					log.Println("unregist client")
+					h.unregister <- client
+				}
+				h.clientMap[client.ID] = client
 
 			case client := <-h.unregister:
-				if _, ok := h.clientMap[client]; ok {
-					delete(h.clientMap, client)
+				if _, ok := h.clientMap[client.ID]; ok {
+					log.Println("do unregist client")
+					delete(h.clientMap, client.ID)
 					close(client.send)
-					h.ClientCloseChan <- client
+					client.Close()
+					// h.ClientCloseChan <- client
 				}
 
 			case message := <-h.Broadcast:
-				for client, _ := range h.clientMap {
+				for _, client := range h.clientMap {
 					select {
 					case client.send <- message:
 					default:
 						close(client.send)
-						delete(h.clientMap, client)
+						delete(h.clientMap, client.ID)
 					}
 				}
 			}
