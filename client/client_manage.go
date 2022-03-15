@@ -30,6 +30,10 @@ type ClientManager struct {
 	dealMsg interface{}
 }
 
+func (c *ClientManager) GetClientMap() map[string]*Client {
+	return c.clientMap
+}
+
 func ClientCenter(onEvent OnMessageFunc) *ClientManager {
 	cm := &ClientManager{
 		Broadcast:   make(chan []byte),
@@ -57,7 +61,7 @@ func (h *ClientManager) Run() {
 				if !ok {
 					return
 				}
-				// 如果已經登入了，先踢掉前面登入的使用者
+
 				if oldClient, ok := h.clientMap[client.ID]; ok {
 					log.Println("unregist client")
 					h.unregister <- oldClient
@@ -107,7 +111,7 @@ func SocketServer(cm *ClientManager, w http.ResponseWriter, r *http.Request) {
 
 }
 
-func StartServer(cm *ClientManager) {
+func WsServer(cm *ClientManager) {
 	http.HandleFunc("/conn", func(res http.ResponseWriter, r *http.Request) {
 		SocketServer(cm, res, r)
 	})

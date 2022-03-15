@@ -24,6 +24,6 @@ func (p Process) Startprocess() {
 		return nil
 	}
 	cm := client.ClientCenter(f)
-	client.StartServer(cm)
-	api.ApiServer()
+	client.WsServer(cm)
+	api.ApiServer(cm)
 }

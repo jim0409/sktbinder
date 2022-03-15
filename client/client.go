@@ -40,6 +40,10 @@ func newClient(unregistChan chan *Client, recvMsg chan *MsgPkg, Id string, conn 
 	return client
 }
 
+func (c *Client) Login() {
+	c.login = true
+}
+
 // readPump: Client to Server
 func (c *Client) readPump(unregistChan chan *Client, recvMsgChan chan *MsgPkg) {
 	log.Println("start read message")
@@ -113,13 +117,12 @@ func (c *Client) writePump() {
 // timeout second for 10s
 func (c *Client) loginTimer() {
 	log.Println("execute loginTimer")
-	// timer := time.NewTimer(10 * time.Second)
+	timer := time.NewTimer(10 * time.Second)
 
 	select {
 	case <-c.close:
 		return
-	// case <-timer.C:
-	case <-time.After(2 * time.Second):
+	case <-timer.C:
 		if !c.login {
 			log.Println("time out")
 			c.Close()
