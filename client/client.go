@@ -30,7 +30,7 @@ func newClient(unregistChan chan *Client, recvMsg chan *MsgPkg, Id string, conn 
 		conn:  conn,
 		send:  make(chan []byte, 256),
 		close: make(chan struct{}),
-		login: true,
+		login: false, // 預設燈入為 false
 	}
 
 	go client.readPump(unregistChan, recvMsg)
@@ -113,17 +113,16 @@ func (c *Client) writePump() {
 // timeout second for 10s
 func (c *Client) loginTimer() {
 	log.Println("execute loginTimer")
-	timer := time.NewTimer(10 * time.Second)
+	// timer := time.NewTimer(10 * time.Second)
 
-	for {
-		select {
-		case <-c.close:
-			return
-		case <-timer.C:
-			if !c.login {
-				log.Println("time out")
-				c.Close()
-			}
+	select {
+	case <-c.close:
+		return
+	// case <-timer.C:
+	case <-time.After(2 * time.Second):
+		if !c.login {
+			log.Println("time out")
+			c.Close()
 		}
 	}
 }

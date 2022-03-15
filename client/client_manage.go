@@ -57,9 +57,10 @@ func (h *ClientManager) Run() {
 				if !ok {
 					return
 				}
-				if _, ok := h.clientMap[client.ID]; ok {
+				// 如果已經登入了，先踢掉前面登入的使用者
+				if oldClient, ok := h.clientMap[client.ID]; ok {
 					log.Println("unregist client")
-					h.unregister <- client
+					h.unregister <- oldClient
 				}
 				h.clientMap[client.ID] = client
 
@@ -69,7 +70,6 @@ func (h *ClientManager) Run() {
 					delete(h.clientMap, client.ID)
 					close(client.send)
 					client.Close()
-					// h.ClientCloseChan <- client
 				}
 
 			case message := <-h.Broadcast:
