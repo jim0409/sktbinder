@@ -51,7 +51,7 @@ func ClientCenter(onEvent OnMessageFunc) *ClientManager {
 }
 
 // OnMessageFunc : 會檢查每次傳送訊息過來時的 msg []byte
-type OnMessageFunc func(msg []byte, cm *ClientManager) error
+type OnMessageFunc func(msg []byte) error
 
 func (h *ClientManager) Run() {
 	go func() {
@@ -104,8 +104,6 @@ func SocketServer(cm *ClientManager, w http.ResponseWriter, r *http.Request) {
 	}
 
 	// new client added ...
-	// client := newClient(cm.unregister, cm.Broadcast, xid.New().String(), conn)
-	// client := newClient(cm.unregister, cm.RecvMsgChan, xid.New().String(), conn)
 	client := newClient(cm.unregister, cm.RecvMsgChan, "123", conn)
 	cm.register <- client
 
@@ -113,6 +111,8 @@ func SocketServer(cm *ClientManager, w http.ResponseWriter, r *http.Request) {
 
 func WsServer(cm *ClientManager) {
 	http.HandleFunc("/conn", func(res http.ResponseWriter, r *http.Request) {
+		log.Println(r.RemoteAddr)
+		cm.OnMessage([]byte("connect"))
 		SocketServer(cm, res, r)
 	})
 }
