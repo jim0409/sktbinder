@@ -16,15 +16,16 @@ func NewProcess() *Process {
 	return &Process{}
 }
 
-func (p Process) Startprocess() {
-	f := func(msg []byte) error {
-		// log.Printf("每次處理訊息都會跑這行!!\n")
-		log.Printf("client connect to server")
-		log.Printf("%v\n", string(msg))
-		return nil
-	}
-
-	cm := client.ClientCenter(f)
+func (p *Process) Startprocess() {
+	cm := client.ClientCenter(connectHandler)
 	client.WsServer(cm)
 	api.ApiServer(cm)
+}
+
+func connectHandler(msg []byte) error {
+	// 1. decode jwt
+	// 2. handle each time
+	log.Printf("client connect to server")
+	log.Printf("%v\n", string(msg))
+	return nil
 }
