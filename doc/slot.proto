@@ -1,0 +1,443 @@
+syntax = "proto3";
+package games_slot;
+/*
+ * 路由由模块名与方法名组成.
+ * 客户端发过的通知由 Send 开头.
+ * 服务器发起的通知由 On 开头
+ * 如 Room 模块的 "请求加入房间" 的方法名为 SendJoinRoom, 则完整的路由名为
+ *   Room.SendJoinRoom
+ */
+
+/**
+ * 桌游游戏(Looptable)模块
+ */
+
+/*
+棋牌登录流程
+SendLoginServer ->OnLoginServer ->SendLoginGame->OnLoginGame->{
+                                                               0://新游戏
+->SendMatchGame->OnMatchGame （取消匹配 SendCancelMatchGame）->SendGetTableInfo
+                                                               1://半途加入
+->SendGetTableInfo
+                                                              }
+SendCheckAccess -> OnCheckAccess //准入检测  保留接口
+
+
+通用协议
+SendLoginServer -> OnLoginServer //登录服务器
+SendCheckAccess -> OnCheckAccess //准入检测  保留接口 准入检测
+SendLoginGame   -> OnLoginGame  //登录游戏
+SendMatchGame   -> OnMatchGame   //匹配游戏  //多人游戏特有
+SendCancelMatchGame -> OnCancelMatchGame  //取消匹配
+SendGetTableInfo -> OnGetTableInfo  //恢复牌局
+SendLeaveGame -> OnLeaveGame  //离开游戏
+
+SendUserRecord  -> OnUserRecord //历史记录
+SendUpdateHeadIcon -> OnUpdateHeadIcon//更新头像
+SendUpdateMoney ->  onUpdateMoney//更新金币
+SendFeedBack -> OnFeedBack//提交反馈
+
+//服务器单推
+OnUpdateHistory//更新历史自己录  //百人游戏特有
+OnNotice//公告
+OnKick //踢人
+OnServerError//异常
+
+*/
+
+/*
+ * 模型定义
+ */
+
+/*通用返回*/
+message Respone {
+  int32 Code = 1; //错误码
+  string Msg = 2; //错误信息
+}
+
+/* 登录后 用户数据 */
+message UserInfo {
+  string NickName = 1; //昵称
+  int32 Icon = 2;
+  int32 Sex = 3;
+  int64 Money = 4;
+  int64 Uid = 5;
+  string HiddenName = 6;
+}
+
+message HistoryInfo {
+  int64 RoomId = 1;               //房间id
+  int64 RoomType = 2;             //房间类型
+  int32 TableStatus = 3;          //当前状态
+  int32 TableTime = 4;            //剩余时间
+  repeated int32 HistoryList = 5; //记录
+  int32 TotalTime = 6;            //总时间
+}
+
+//牌局记录
+message RecordInfo {
+  int32 Index = 1;     //索引
+  string RecordId = 2; //牌局编号
+  int64 RoomType = 3;  //房间类型
+  int64 WinMoney = 4;  //盈利
+  int64 EndTime = 5;   //结束时间
+  // repeated bytes /*Record*/ Extra = 6; //子游戏自定义
+  string RoomName = 7; //房间类型
+}
+
+//玩家数据
+message PlayerInfo {
+  int32 Rank = 1;
+  int64 Uid = 2;
+  int64 Money = 3;
+  int64 BetCoins = 4; //当前下注
+  int32 Sex = 5;
+  int32 Icon = 6;
+  string NickName = 7;
+}
+
+message Room {
+  int64 RoomId = 1;              //房间id
+  int64 RoomType = 2;            //房间类型
+  string RoomName = 3;           //房间名称
+  int32 Status = 4;              // 状态. 0: 开启. 1: 即将开启.
+  string PumpingRatio = 5;       // 抽水, 百分比值
+  RoomInfo Extra = 99; //子游戏自定义
+}
+
+/**********************************************************************************************************/
+
+/* 大厅消息 */
+
+/* 进入大厅 */
+message SendLoginServer {
+  string Token = 1;
+  string NickName = 2;
+  int64 Uid = 3;
+}
+message OnLoginServer {
+  Respone Res = 1;
+  UserInfo UserInfo = 2; //用户数据
+}
+
+// 房间信息
+message OnUpdateRoomInfo {
+  Respone Res = 1;
+  repeated Room RoomList = 2; //房间列表
+}
+
+// 修改游戏相关信息
+message OnGameUpdate {
+  Respone Res = 1;
+  // 配置相关
+  bool Enable = 200;  // 是否启用
+  bool CanChat = 201; // 是否开启聊天
+  bool LimitIP = 202; // 是否限制同 IP 用户
+}
+
+//  牌局历史记录
+message OnUpdateHistory {
+  Respone Res = 1;
+  repeated HistoryInfo HistoryList = 2;
+}
+
+//获取用户历史记录
+message SendUserRecord { int64 Uid = 1; }
+message OnUserRecord {
+  Respone Res = 1;
+  repeated RecordInfo RecordList = 2;
+}
+
+//更新头像
+message SendUpdateHeadIcon {
+  int32 Sex = 1;
+  int32 Icon = 2;
+}
+message OnUpdateHeadIcon { Respone Res = 1; }
+
+//离开大厅
+message SendLeaveServer { int64 Uid = 1; }
+
+//公告
+message OnNotice {
+  Respone Res = 1;
+  string UserName = 2;
+  int64 RoomType = 3; // 0 1 2 3
+  int64 WinMoney = 4;
+  int64 RoomID = 5;
+}
+
+//进入房间并加入游戏
+message SendLoginGame {
+  int64 Uid = 1;
+  int64 RoomId = 2;
+  int32 RoomType = 3;
+  string TableID = 4;
+}
+
+message OnLoginGame {
+  Respone Res = 1;
+  bool IsInGame = 2;
+  string TableID = 3;
+}
+
+message SendMatchGame {}
+
+message OnMatchGame {
+  Respone Res = 1;
+  string TableId = 2;
+}
+
+// 无需匹配直接开始的游戏
+message SendStartGame {}
+
+message OnStartGame {
+  Respone Res = 1;
+  string TableId = 2;
+}
+
+//获取牌桌信息
+message SendGetTableInfo {}
+
+//用户下注
+message SendUserBet {
+  int64 BetCoins = 1; //下注金额
+  int32 BetType = 2;  // 下注类型  TableTouchArea
+}
+message OnUserBet {
+  Respone Res = 1;
+  int64 BetCoins = 2;              //下注金额
+  int32 BetType = 3;               // 下注类型  TableTouchArea
+  int64 Money = 4;                 //剩余金币
+  repeated int64 UserBetCoins = 5; // 5长度数组 [0,0,0,0,0]  TableTouchArea
+  // 排序
+  repeated int64 PlayerBetCoins = 6; //每个所有用户下注筹码
+}
+
+//获取用户列表  前端可主动刷新  后台也主动推
+message SendGetPlayerList {
+  int64 Uid = 1;
+  int64 RoomId = 2;
+  int32 RoomType = 3;
+}
+message OnGetPlayerList {
+  Respone Res = 1;
+  repeated PlayerInfo PlayerList = 2;
+}
+
+//离开房间
+message SendLeaveGame {
+  int64 Uid = 1;
+  int64 RoomId = 2;
+  int32 RoomType = 3;
+}
+//离开房间
+message SendLeaveRoom {}
+message OnLeaveGame { Respone Res = 1; }
+// 离开桌子
+message SendLeaveTable {}
+message OnLeaveTable { Respone Res = 1; }
+
+//牌局状态
+message OnTableStatus {
+  Respone Res = 1;
+  int32 TableStatus = 2; //当前状态
+  int32 TableTime = 3;   //剩余时间
+  repeated int64 PlayerBetCoins = 4; // 5长度数组  [0,0,0,0,0]   TableTouchArea 排序
+  repeated int64 UserBetCoins = 5; // 5长度数组 [0,0,0,0,0]  TableTouchArea
+  // 排序
+  int32 TableStatusMaxTime = 6;    //当前状态的最大时间
+}
+
+//踢人
+message OnKick {
+  Respone Res = 1;
+  int64 Uid = 2;
+}
+
+//开牌
+message OnOpenCard {
+  Respone Res = 1;
+  repeated int32 CardValue =
+  2; //当前牌 6长度数据  无牌传 [0,0,0,0,0,0]   前3闲  后三庄
+  repeated int32 CardPoint = 3; //庄闲点数   数组  长度2   第一位闲  第二位庄
+  int32 WinArea = 4;             //赢的区域
+  repeated int64 AreaResult = 5; //各个区域得游戏结果
+}
+
+//进入房间
+message SendLoginRoom { int64 RoomId = 1; }
+message OnLoginRoom { Respone Res = 1; }
+
+//更新余额
+message SendUpdateMoney { int64 Uid = 1; }
+message OnUpdateMoney {
+  Respone Res = 1;
+  int64 Money = 2;
+}
+
+//派奖
+message OnReward {
+  Respone Res = 1;
+  int32 WinArea = 2;  //赢的区域  庄闲和 庄对 闲对  TableTouchArea
+  int64 Money = 3;    //剩余金币
+  int64 WinMoney = 4; //派奖时的金币变化. 一般情况下为赢的金币,
+  //但在需要再次扣款(如庄家赢翻倍)时为负值
+  repeated int64 AreaResult = 5; //各个区域得游戏结果
+}
+
+//新游戏开始
+message OnGameStart {
+  Respone Res = 1;
+  int32 UsedCardCount = 2;   //使用的牌
+  int32 UnUsedCardCount = 3; //未使用的牌
+  string RecordId = 4;       //牌局编号
+  int32 RoundId = 5;         // 第xx局
+}
+
+message OnGameEnd { Respone Res = 1; }
+
+// 重复上一局下注
+message SendRepeatBet {
+  repeated int64 BetCoins = 1; // 区域, 金额
+}
+message OnRepeatBet {
+  Respone Res = 1;
+  int64 Money = 2;             //剩余金币
+  repeated int64 BetCoins = 3; // 5长度数组 [0,0,0,0,0]  TableTouchArea 排序
+  repeated int64 UserBetCoins = 4; // 5长度数组 [0,0,0,0,0]  TableTouchArea 排序
+  repeated int64 PlayerBetCoins =
+  5; // 5长度数组  [0,0,0,0,0]   TableTouchArea 排序
+}
+
+//反馈
+message SendFeedBack { string Context = 1; }
+
+message OnFeedBack { Respone Res = 1; }
+
+// res code  1. 其他; 0x300(2): 停机维护; 3. token过期, 4. 重新打开页面, 5.
+// 下注失败. 6.派奖失败; 7. 维护提示
+message OnServerError { Respone Res = 1; }
+
+// 当前步骤改变
+message OnStateChange {
+  int32 ID = 1;
+  int32 TotalTime = 2;
+  bool CanBet = 3;
+}
+
+message SendCancelMatchGame {}
+message OnCancelMatchGame { Respone Res = 1; }
+
+// 中途退出游戏
+message SendEarlyExitTable {}
+message OnEarlyExitTable { Respone Res = 1; }
+
+//设置携带金额
+message SendSetRoundMoney {
+  int32 Money = 1;
+  bool AutoSet = 2;
+}
+message OnSetRoundMoney { Respone Res = 1; }
+
+message SendPublicChat {
+  int32 ChatType = 1;  // 0表情 1 文本
+  int32 ContentID = 2; // 内容编号 表情 12个，0-11， 文本8个 0-7
+  int64 ChairID = 3;
+}
+
+message OnSendPublicChat {
+  Respone Res = 1;
+  int32 ChatType = 2;  // 0表情 1 文本
+  int32 ContentID = 3; // 内容编号 表情 12个，0-11， 文本8个 0-7
+  int64 UserID = 4;
+  int64 ChairID = 5;
+}
+
+// 设置用户房间属性
+message SendUserSettings {
+  map<string, string> UserSettings = 1;
+  int64 RoomID = 2;
+  string TableID = 3;
+}
+
+message OnUserSettings { Respone Res = 1; }
+
+message SendGetUserSetting {
+  string Key = 1;
+  int64 RoomID = 2;
+  string TableID = 3;
+}
+
+message OnGetUserSetting {
+  Respone Res = 1;
+  string Val = 2;
+}
+
+// 用户下注记录
+message SendUserBetLogs {}
+message UserBetLog {
+  bytes /*GameUserBetLog*/ Extra = 1; //子游戏自定义属性
+}
+
+message OnUserBetLogs {
+  Respone Res = 1;
+  repeated UserBetLog Records = 2; //子游戏自定义
+}
+
+message OnMessage {
+  Respone Res = 1;
+  int32 ID = 2;
+  string Content = 3;
+}
+
+//请求动作类型
+enum Slot_ActionID {
+  None = 0;
+  CS_BET = 1; // 下注
+  SC_BET = 101; // 下注返回
+  SC_JACKPOT_UPDATE = 102; //服务端主动推送更新大奖池
+}
+
+//客户端发送action
+message SendAction {
+  Slot_ActionID ID = 1; //动作ID
+  int64 ActionMoney = 2; //Action操作的金额
+}
+
+message OnAction {
+  Respone Res = 1;
+  Slot_ActionID ID = 2; //动作ID
+  int64 ActionMoney = 3; //Action操作的金额
+  repeated BetActionResult BetActionResults = 4; //如果本次下注出现了免费次数，则将剩余几次的结果一起返回
+  int64 JackPotUpdate = 5; //本字段只在SC_JACKPOT_UPDATE中才会出现
+}
+
+message BetActionResult {
+  int64 CurrentMoney = 1; //本次Action后玩家的余额
+  repeated SymbolInfo SymbolList = 2; //按顺序拆分成5组，每组3个元素为1列
+  string ActiveLines = 3; //激活的线路索引(从0开始)，以逗号分割
+  int64 ResultMoney = 4; //赢金币数
+  int32 ResultMulti = 5; //赢金币倍数
+  int32 FreeCount = 6; //本次下注获得的免费次数
+  int32 BonusCount = 7; //本次下注bonus奖励次数
+  int32 JackPotCount = 8; //本次下注中JACKPOT的百分值，比如10对应着10%的奖励
+}
+
+//元素
+message SymbolInfo {
+  int32 SymbolID = 1; //1苹果 2芒果 3橙子 4葡萄 5西瓜 6樱桃 7铃铛 8幸运7 9BAR 10WILD 11BONUS 12SCATTER 13JACKPOT
+  bool IsActive = 2; //是否激活
+}
+
+//房间属性
+message RoomInfo {
+  int64 AllowBet = 4; // 准入金额
+  repeated int32 ChipList = 5; //筹码配置数组  0.45,0.9,1.8,4.5,9,18,45,90,180,360
+}
+
+message OnGetTableInfo {
+  Respone Res = 1;
+  int32 FreeCount = 2; //免费次数
+  int64 FreeCountChip = 3; //获得免费次数时下注的筹码值
+}

@@ -1,0 +1,164 @@
+syntax = "proto3";
+package utils;
+option go_package="../../utils";
+
+enum MSG_HEADER {
+    // 初始化 第一個值為 0
+    XXX_Trivial = 0;
+
+    // C_S_ : Client to Server
+    C_S_LOGIN_SERVER = 1;
+    C_S_LOGIN_GAME = 2;
+    C_S_MATCH_GAME= 3;
+    C_S_CANCEL_MATCH_GAME = 4;
+    C_S_TRANSFER_COIN = 5;
+    C_S_GET_TABLE_INFO = 6;
+    C_S_BET_LOG = 7;
+
+
+    // S_C_ : Server to Client
+    S_C_LOGIN_SERVER = 1001;
+    S_C_LOGIN_GAME = 1002;
+    S_C_MATCH_GAME = 1003;
+    S_C_CANCEL_MATCH_GAME = 1004;
+    S_C_TRANSFER_COIN = 1005;
+    S_C_GET_TABLE_INFO = 1006;
+    S_C_BET_LOG = 1007;
+
+
+    // General Form
+    C_S_PING = 9001;
+    S_C_PING = 9002;
+    C_S_USER_TRANSFER = 9003;
+    C_S_USER_RECORDS = 9004;
+    S_C_NOTICE = 9005;
+    S_C_KICK_OUT = 9006;
+    S_C_COIN_REFRESH = 9007;
+    S_C_EXIT_GAME = 9008;
+    S_C_ERROR = 9009;
+}
+
+message Response{
+    int32 Code = 1; // 返回代碼
+    string Msg = 2; // 返回信息
+}
+
+// Client to Server message
+
+// C_S_LOGIN_SERVER : 玩家登入
+message C_S_LoginServer {
+    optional string account     = 1; // 帳號
+    optional string passwd      = 2; // 密碼
+    optional bool isLogin       = 3; // 是否登錄
+    optional string lang        = 4; // 客戶端語言
+    optional bool isTrial       = 5; // 是否為試玩
+    optional fixed32 clientKind = 6; // client端
+    optional string ag          = 7; // 代理商帳號
+    optional string sid         = 8; // 從瀏覽器url中獲取的sid參數
+    optional fixed32 balance    = 9; // 從 token 中獲取帳戶的餘額
+    optional string sn          = 10; // 廳主編碼
+    optional string ip          = 11; // 客戶端真實IP地址
+}
+
+// C_S_LOGIN_GAME : 玩家選擇登入房間
+message C_S_LoginGame {
+    optional string RoomId   = 1; // 房間編號
+    optional string RoomType = 2; // 房間類型
+    optional string RoomName = 3; // 房間名稱
+    optional string Status   = 4; // 狀態
+    optional string Icon     = 5;
+}
+
+// C_S_MATCH_GAME : 玩家開始進行遊戲(匹配遊戲)
+message C_S_MatchGame {
+    string BetMoney = 1; // 下注金額(元)
+    string BetType  = 2; // 下注類型
+}
+
+// C_S_CANCEL_MATCH_GAME : 取消下注
+message C_S_CancelMatchGame {
+    string BeforeRecordId = 1; // 前一輪下注的局號
+}
+
+// C_S_TRANSFER_COIN : 轉換金幣
+message C_S_TransferCoin {
+    fixed64 coin                 = 1;
+    optional fixed32 robotSeatID = 2; // 機器人座位(1~n), =0表示非機器人操作
+}
+
+// C_S_GET_TABLE_INFO : 獲取滾輪表結果
+message C_S_GetTableInfo {
+    Response Res          = 1; // 投注結果
+    fixed32 FreeCount     = 2; // 免費次數
+    fixed64 FreeCountChip = 3; // 獲得免費次數時下注的籌碼值
+}
+
+// C_S_BET_LOG : 獲取歷史投注記錄
+message C_S_BetLog {
+    fixed32 page              = 1; // 頁碼(從1開始)
+    optional fixed32 rowcount = 2; // 每頁返回的最大紀錄數量(可選, 默認為10條)
+    optional bool isGetTotal  = 3; // 是否獲取總計，只有打慨投注記錄頁面才需要為 true，其他換頁碼時為 false
+}
+
+
+// Server to Client message
+
+// S_C_LOGIN_SERVER : 回傳玩家登入資訊
+message S_C_LoginServer {
+    string nickname = 1; // 暱稱
+    string money = 2; // 帳戶餘額
+    fixed64 coin = 3; // 金幣
+    fixed32 ratemoney2Coin = 4; // 金錢兌換金幣的比率
+}
+
+// S_C_LOGIN_GAME : 回傳玩家登入房間資訊
+message S_C_LoginGame {
+    string Status = 1; // 狀態
+}
+
+// S_C_MATCH_GAME : 回傳遊戲狀況
+message S_C_MatchGame {
+    string Status = 1; // 狀態
+    optional fixed32 robotSeatID = 2; // 機器人座位(1~n), =0表示非機器人操作
+    fixed64 deltaCoin            = 3; // 金額變化
+    fixed64 coin                 = 4; // 玩家實際金幣數量
+    string money                 = 5; // 玩家帳戶餘額
+}
+
+// S_C_CANCEL_MATCH_GAME : 回傳取消下注結果
+message S_C_CancelMatchGame {
+    optional string Status = 1; // 狀態 0, cancel right now; 1, would cancel on the next spin
+}
+
+// S_C_TRANSFER_COIN : 回傳幣值轉換結果
+message S_C_TransferCoin {
+    optional fixed32 robotSeatID = 1; // 機器人座位(1~n), =0表示非機器人操作
+    fixed64 deltaCoin            = 2; // 金額變化
+    fixed64 coin                 = 3; // 玩家實際金幣數量
+    string money                 = 4; // 玩家帳戶餘額
+}
+
+// S_C_GET_TABLE_INFO : 回傳滾輪表結果
+message S_C_GetTableInfo {
+    Response Res          = 1; // 投注結果
+    fixed32 FreeCount     = 2; // 免費次數
+    fixed64 FreeCountChip = 3; // 獲得免費次數時下注的籌碼值
+}
+
+// S_C_BET_LOG : 回傳注單結果
+message S_C_BetLog {
+    message OneBet {
+        string createtm = 1; // 紀錄時間
+        string inkid    = 2; // 局號
+        string bet      = 3; // 下注金額(元)
+        string gain     = 4; // 派彩金額(元)
+        string profit   = 5; // 輸贏金額(元)
+        string betlog   = 6; // json格式的投注記錄
+    }
+    repeated OneBet betlog      = 1; // 注單紀錄列表
+    optional fixed32 page       = 2; // 當前頁
+    optional fixed32 pagecount  = 3; // 總頁數
+    optional string totalBet    = 4; // 總計下注金額(元)
+    optional string totalGain   = 5; // 總計派彩金額(元)
+    optional string totalProfit = 6; // 總計輸贏金額(元)
+}
